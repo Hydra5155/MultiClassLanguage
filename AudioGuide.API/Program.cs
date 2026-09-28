@@ -25,8 +25,10 @@ public class Program
         });
 
         // 1. Cấu hình DbContext dùng InMemory Database để test nhanh
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
         builder.Services.AddDbContext<AppDbContext>(options =>
-            options.UseInMemoryDatabase("AudioGuideDb"));
+            options.UseSqlServer(connectionString));
 
         // 2. Đăng ký Dependency Injection cho tầng BLL
         builder.Services.AddScoped<IAudioGuideService, AudioGuideService>();

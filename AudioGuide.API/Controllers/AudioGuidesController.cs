@@ -31,3 +31,17 @@ public class AudioGuidesController : ControllerBase
         return CreatedAtAction(nameof(Get), new { lang = created.LanguageCode }, created);
     }
 }
+[HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteAudioGuide(int id)
+    {
+        var item = await _context.AudioGuides.FindAsync(id);
+        if (item == null)
+        {
+            return NotFound(new { message = "Không tìm thấy bản ghi để xóa." });
+        }
+
+        _context.AudioGuides.Remove(item);
+        await _context.SaveChangesAsync();
+
+        return NoContent(); // Trả về mã 204 No Content xóa thành công
+    }
