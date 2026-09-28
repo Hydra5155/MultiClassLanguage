@@ -1,6 +1,5 @@
 ﻿using AudioGuide.BLL.Services;
 using AudioGuide.DAL;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
@@ -12,28 +11,28 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // 1. Thêm Controllers và OpenAPI
         builder.Services.AddControllers();
+        builder.Services.AddOpenApi();
 
-        // Cấu hình OpenAPI: Xóa Servers URL để Scalar tự động trỏ đúng domain HTTPS trên Render
-        builder.Services.AddOpenApi(options =>
-        {
-            options.AddDocumentTransformer((document, context, cancellationToken) =>
-            {
-                document.Servers.Clear();
-                return Task.CompletedTask;
-            });
-        });
-
-        // 1. Cấu hình DbContext dùng InMemory Database để test nhanh
+        // 2. Cấu hình DbContext linh hoạt:
+        // Nếu có chuỗi kết nối DefaultConnection thì kết nối SQL Server, ngược lại dùng In-Memory Database
         var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrEmpty(connectionString))
+        {
+            builder.Services.AddDbContext<AppDbContext>(options =>
+                options.UseSqlServer(connectionString));
+        }
+        else
+        {
+            builder.Services.AddDbContext<AppDbContext>(options =>
+                options.UseInMemoryDatabase("AudioGuideDb"));
+        }
 
-        builder.Services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(connectionString));
-
-        // 2. Đăng ký Dependency Injection cho tầng BLL
+        // 3. Đăng ký Dependency Injection cho tầng BLL
         builder.Services.AddScoped<IAudioGuideService, AudioGuideService>();
 
-        // 3. Cấu hình CORS mở cho Web (React) và Mobile (React Native)
+        // 4. Cấu hình CORS để Vercel Web App gọi API không bị chặn
         builder.Services.AddCors(options =>
         {
             options.AddPolicy("AllowAll", policy =>
@@ -46,22 +45,25 @@ public class Program
 
         var app = builder.Build();
 
-        // Nhận diện giao thức HTTPS đằng sau reverse proxy của Render
-        app.UseForwardedHeaders(new ForwardedHeadersOptions
-        {
-            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-        });
-
-        // Tự động nạp dữ liệu mẫu vào InMemory Database khi khởi động
+        // 5. Khởi tạo dữ liệu ban đầu an toàn (không làm crash ứng dụng trên Cloud)
         using (var scope = app.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            db.Database.EnsureCreated();
+            try
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                db.Database.EnsureCreated();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Database initialization note: {ex.Message}");
+            }
         }
 
-        // Bật OpenAPI và giao diện Scalar
+        // 6. Cho phép mở tài liệu Scalar cả ở môi trường Development và Production
         app.MapOpenApi();
         app.MapScalarApiReference();
+
+        app.UseHttpsRedirection();
 
         // Kích hoạt CORS
         app.UseCors("AllowAll");
