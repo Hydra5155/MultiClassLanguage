@@ -1,82 +1,67 @@
 ﻿using AudioGuide.BLL.Services;
-using AudioGuide.DAL.Entities;
-using Microsoft.AspNetCore.Mvc;
+using AudioGuide.DAL;
+using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
-namespace AudioGuide.API.Controllers;
+namespace AudioGuide.API;
 
-[ApiController]
-[Route("api/[controller]")]
-public class AudioGuidesController : ControllerBase
+public class Program
 {
-    private readonly IAudioGuideService _service;
-
-    public AudioGuidesController(IAudioGuideService service)
+    public static void Main(string[] args)
     {
-        _service = service;
-    }
+        var builder = WebApplication.CreateBuilder(args);
 
-    [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? lang)
-    {
-        var data = await _service.GetAllAsync(lang);
-        return Ok(data);
-    }
+        builder.Services.AddControllers();
+        builder.Services.AddOpenApi();
 
-    [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id)
-    {
-        if (id <= 0)
+        // Cấu hình Database
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrEmpty(connectionString))
         {
-            return BadRequest(new { message = "ID không hợp lệ." });
+            builder.Services.AddDbContext<AppDbContext>(options =>
+                options.UseSqlServer(connectionString));
+        }
+        else
+        {
+            builder.Services.AddDbContext<AppDbContext>(options =>
+                options.UseInMemoryDatabase("AudioGuideDb"));
         }
 
-        var item = await _service.GetByIdAsync(id);
-        if (item == null)
+        builder.Services.AddScoped<IAudioGuideService, AudioGuideService>();
+
+        // Cấu hình CORS
+        builder.Services.AddCors(options =>
         {
-            return NotFound(new { message = $"Không tìm thấy bài thuyết minh có ID = {id}." });
+            options.AddDefaultPolicy(policy =>
+            {
+                policy.AllowAnyOrigin()
+                      .AllowAnyHeader()
+                      .AllowAnyMethod();
+            });
+        });
+
+        var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            try
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                db.Database.EnsureCreated();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"DB Init warning: {ex.Message}");
+            }
         }
 
-        return Ok(item);
-    }
+        app.MapOpenApi();
+        app.MapScalarApiReference();
 
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] AudioGuideItem item)
-    {
-        if (string.IsNullOrWhiteSpace(item.Title))
-        {
-            return BadRequest(new { message = "Tiêu đề không được để trống." });
-        }
+        app.UseCors();
+        app.UseAuthorization();
+        app.MapControllers();
 
-        if (string.IsNullOrWhiteSpace(item.LanguageCode))
-        {
-            item.LanguageCode = "vi";
-        }
-
-        try
-        {
-            var created = await _service.CreateAsync(item);
-            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = ex.Message, detail = ex.InnerException?.Message });
-        }
-    }
-
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        if (id <= 0)
-        {
-            return BadRequest(new { message = "ID không hợp lệ." });
-        }
-
-        var result = await _service.DeleteAsync(id);
-        if (!result)
-        {
-            return NotFound(new { message = $"Không tìm thấy bài thuyết minh có ID = {id} để xóa." });
-        }
-
-        return Ok(new { message = $"Đã xóa thành công bài thuyết minh có ID = {id}." });
+        app.Run();
     }
 }
