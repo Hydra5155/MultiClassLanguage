@@ -11,12 +11,10 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // 1. Thêm Controllers và OpenAPI
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
 
-        // 2. Cấu hình DbContext linh hoạt:
-        // Nếu có chuỗi kết nối DefaultConnection thì kết nối SQL Server, ngược lại dùng In-Memory Database
+        // 1. Cấu hình DbContext an toàn
         var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrEmpty(connectionString))
         {
@@ -29,13 +27,12 @@ public class Program
                 options.UseInMemoryDatabase("AudioGuideDb"));
         }
 
-        // 3. Đăng ký Dependency Injection cho tầng BLL
         builder.Services.AddScoped<IAudioGuideService, AudioGuideService>();
 
-        // 4. Cấu hình CORS để Vercel Web App gọi API không bị chặn
+        // 2. Cấu hình CORS mở hoàn toàn
         builder.Services.AddCors(options =>
         {
-            options.AddPolicy("AllowAll", policy =>
+            options.AddDefaultPolicy(policy =>
             {
                 policy.AllowAnyOrigin()
                       .AllowAnyHeader()
@@ -45,7 +42,7 @@ public class Program
 
         var app = builder.Build();
 
-        // 5. Khởi tạo dữ liệu ban đầu an toàn (không làm crash ứng dụng trên Cloud)
+        // 3. Khởi tạo dữ liệu mẫu
         using (var scope = app.Services.CreateScope())
         {
             try
@@ -59,14 +56,14 @@ public class Program
             }
         }
 
-        // 6. Cho phép mở tài liệu Scalar cả ở môi trường Development và Production
+        // 4. Kích hoạt Scalar UI
         app.MapOpenApi();
         app.MapScalarApiReference();
 
-        app.UseHttpsRedirection();
+        // Bật CORS cho toàn bộ ứng dụng
+        app.UseCors();
 
-        // Kích hoạt CORS
-        app.UseCors("AllowAll");
+        // LƯU Ý: KHÔNG gọi app.UseHttpsRedirection() khi chạy trong container Docker trên Render
 
         app.UseAuthorization();
         app.MapControllers();
