@@ -1,73 +1,67 @@
 ﻿using AudioGuide.BLL.Services;
 using AudioGuide.DAL;
+using AudioGuide.DAL.Entities;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Scalar.AspNetCore;
 
-namespace AudioGuide.API;
+namespace AudioGuide.API.Controllers;
 
-public class Program
+[ApiController]
+[Route("api/[controller]")]
+public class AudioGuidesController : ControllerBase
 {
-    public static void Main(string[] args)
+    private readonly IAudioGuideService _service;
+    private readonly AppDbContext _context;
+
+    public AudioGuidesController(IAudioGuideService service, AppDbContext context)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        _service = service;
+        _context = context;
+    }
 
-        builder.Services.AddControllers();
-        builder.Services.AddOpenApi();
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] string? lang)
+    {
+        var data = await _service.GetAllAsync(lang);
+        return Ok(data);
+    }
 
-        // 1. Cấu hình DbContext an toàn
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-        if (!string.IsNullOrEmpty(connectionString))
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var item = await _service.GetByIdAsync(id);
+        if (item == null) return NotFound();
+        return Ok(item);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] AudioGuideItem item)
+    {
+        try
         {
-            builder.Services.AddDbContext<AppDbContext>(options =>
-                options.UseSqlServer(connectionString));
+            // Đảm bảo Id được tự sinh (không bị gán cố định)
+            item.Id = 0;
+
+            _context.AudioGuides.Add(item);
+            await _context.SaveChangesAsync();
+
+            return Ok(item);
         }
-        else
+        catch (Exception ex)
         {
-            builder.Services.AddDbContext<AppDbContext>(options =>
-                options.UseInMemoryDatabase("AudioGuideDb"));
+            return StatusCode(500, new { message = ex.Message, detail = ex.InnerException?.Message });
         }
+    }
 
-        builder.Services.AddScoped<IAudioGuideService, AudioGuideService>();
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var item = await _context.AudioGuides.FindAsync(id);
+        if (item == null) return NotFound();
 
-        // 2. Cấu hình CORS mở hoàn toàn
-        builder.Services.AddCors(options =>
-        {
-            options.AddDefaultPolicy(policy =>
-            {
-                policy.AllowAnyOrigin()
-                      .AllowAnyHeader()
-                      .AllowAnyMethod();
-            });
-        });
+        _context.AudioGuides.Remove(item);
+        await _context.SaveChangesAsync();
 
-        var app = builder.Build();
-
-        // 3. Khởi tạo dữ liệu mẫu
-        using (var scope = app.Services.CreateScope())
-        {
-            try
-            {
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                db.Database.EnsureCreated();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Database initialization note: {ex.Message}");
-            }
-        }
-
-        // 4. Kích hoạt Scalar UI
-        app.MapOpenApi();
-        app.MapScalarApiReference();
-
-        // Bật CORS cho toàn bộ ứng dụng
-        app.UseCors();
-
-        // LƯU Ý: KHÔNG gọi app.UseHttpsRedirection() khi chạy trong container Docker trên Render
-
-        app.UseAuthorization();
-        app.MapControllers();
-
-        app.Run();
+        return Ok(new { message = $"Đã xóa thành công bài thuyết minh id {id}" });
     }
 }
