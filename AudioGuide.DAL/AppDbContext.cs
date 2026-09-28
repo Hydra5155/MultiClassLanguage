@@ -9,11 +9,22 @@ public class AppDbContext : DbContext
     {
     }
 
-    public DbSet<AudioGuideItem> AudioGuides { get; set; }
+    // Khởi tạo Set để tránh cảnh báo CS8618
+    public DbSet<AudioGuideItem> AudioGuides => Set<AudioGuideItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Cấu hình bảng AudioGuides
+        modelBuilder.Entity<AudioGuideItem>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(250);
+            entity.Property(e => e.LanguageCode).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.AudioUrl).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.Transcript).IsRequired();
+        });
 
         // Nạp sẵn dữ liệu thuyết minh thực tế
         modelBuilder.Entity<AudioGuideItem>().HasData(

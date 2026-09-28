@@ -1,6 +1,5 @@
 ﻿using AudioGuide.BLL.DTOs;
 using AudioGuide.BLL.Services;
-using AudioGuide.DAL;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AudioGuide.API.Controllers;
@@ -9,44 +8,70 @@ namespace AudioGuide.API.Controllers;
 [Route("api/[controller]")]
 public class AudioGuidesController : ControllerBase
 {
-    private readonly IAudioGuideService _audioService;
-    private readonly AppDbContext _context;
+    private readonly IAudioGuideService _service;
 
-    public AudioGuidesController(IAudioGuideService audioService, AppDbContext context)
+    public AudioGuidesController(IAudioGuideService service)
     {
-        _audioService = audioService;
-        _context = context;
+        _service = service;
     }
 
-    // GET /api/audioguides?lang=vi
     [HttpGet]
-    public async Task<IActionResult> Get([FromQuery] string lang = "vi")
+    public async Task<IActionResult> GetAll([FromQuery] string? lang)
     {
-        var result = await _audioService.GetByLanguageAsync(lang);
-        return Ok(result);
+        var data = await _service.GetAllAsync(lang);
+        return Ok(data);
     }
 
-    // POST /api/audioguides
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        if (id <= 0)
+        {
+            return BadRequest(new { message = "ID không hợp lệ." });
+        }
+
+        var item = await _service.GetByIdAsync(id);
+        if (item == null)
+        {
+            return NotFound(new { message = $"Không tìm thấy bài thuyết minh có ID = {id}." });
+        }
+
+        return Ok(item);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] AudioGuideDto dto)
     {
-        var created = await _audioService.CreateAsync(dto);
-        return CreatedAtAction(nameof(Get), new { lang = created.LanguageCode }, created);
-    }
-
-    // DELETE /api/audioguides/{id}
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteAudioGuide(int id)
-    {
-        var item = await _context.AudioGuides.FindAsync(id);
-        if (item == null)
+        if (string.IsNullOrWhiteSpace(dto.Title))
         {
-            return NotFound(new { message = "Không tìm thấy bản ghi để xóa." });
+            return BadRequest(new { message = "Tiêu đề không được để trống." });
         }
 
-        _context.AudioGuides.Remove(item);
-        await _context.SaveChangesAsync();
+        try
+        {
+            var created = await _service.CreateAsync(dto);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = ex.Message, detail = ex.InnerException?.Message });
+        }
+    }
 
-        return NoContent(); // Trả về mã 204 No Content xóa thành công
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        if (id <= 0)
+        {
+            return BadRequest(new { message = "ID không hợp lệ." });
+        }
+
+        var result = await _service.DeleteAsync(id);
+        if (!result)
+        {
+            return NotFound(new { message = $"Không tìm thấy bài thuyết minh có ID = {id} để xóa." });
+        }
+
+        return Ok(new { message = $"Đã xóa thành công bài thuyết minh có ID = {id}." });
     }
 }

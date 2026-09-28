@@ -1,8 +1,6 @@
 ﻿using AudioGuide.BLL.Services;
-using AudioGuide.DAL;
 using AudioGuide.DAL.Entities;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace AudioGuide.API.Controllers;
 
@@ -11,12 +9,10 @@ namespace AudioGuide.API.Controllers;
 public class AudioGuidesController : ControllerBase
 {
     private readonly IAudioGuideService _service;
-    private readonly AppDbContext _context;
 
-    public AudioGuidesController(IAudioGuideService service, AppDbContext context)
+    public AudioGuidesController(IAudioGuideService service)
     {
         _service = service;
-        _context = context;
     }
 
     [HttpGet]
@@ -26,26 +22,40 @@ public class AudioGuidesController : ControllerBase
         return Ok(data);
     }
 
-    [HttpGet("{id}")]
+    [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
+        if (id <= 0)
+        {
+            return BadRequest(new { message = "ID không hợp lệ." });
+        }
+
         var item = await _service.GetByIdAsync(id);
-        if (item == null) return NotFound();
+        if (item == null)
+        {
+            return NotFound(new { message = $"Không tìm thấy bài thuyết minh có ID = {id}." });
+        }
+
         return Ok(item);
     }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] AudioGuideItem item)
     {
+        if (string.IsNullOrWhiteSpace(item.Title))
+        {
+            return BadRequest(new { message = "Tiêu đề không được để trống." });
+        }
+
+        if (string.IsNullOrWhiteSpace(item.LanguageCode))
+        {
+            item.LanguageCode = "vi";
+        }
+
         try
         {
-            // Đảm bảo Id được tự sinh (không bị gán cố định)
-            item.Id = 0;
-
-            _context.AudioGuides.Add(item);
-            await _context.SaveChangesAsync();
-
-            return Ok(item);
+            var created = await _service.CreateAsync(item);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
         catch (Exception ex)
         {
@@ -53,15 +63,20 @@ public class AudioGuidesController : ControllerBase
         }
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var item = await _context.AudioGuides.FindAsync(id);
-        if (item == null) return NotFound();
+        if (id <= 0)
+        {
+            return BadRequest(new { message = "ID không hợp lệ." });
+        }
 
-        _context.AudioGuides.Remove(item);
-        await _context.SaveChangesAsync();
+        var result = await _service.DeleteAsync(id);
+        if (!result)
+        {
+            return NotFound(new { message = $"Không tìm thấy bài thuyết minh có ID = {id} để xóa." });
+        }
 
-        return Ok(new { message = $"Đã xóa thành công bài thuyết minh id {id}" });
+        return Ok(new { message = $"Đã xóa thành công bài thuyết minh có ID = {id}." });
     }
 }
