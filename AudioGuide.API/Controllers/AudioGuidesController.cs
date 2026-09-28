@@ -1,5 +1,6 @@
 ﻿using AudioGuide.BLL.DTOs;
 using AudioGuide.BLL.Services;
+using AudioGuide.DAL;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AudioGuide.API.Controllers;
@@ -9,10 +10,12 @@ namespace AudioGuide.API.Controllers;
 public class AudioGuidesController : ControllerBase
 {
     private readonly IAudioGuideService _audioService;
+    private readonly AppDbContext _context;
 
-    public AudioGuidesController(IAudioGuideService audioService)
+    public AudioGuidesController(IAudioGuideService audioService, AppDbContext context)
     {
         _audioService = audioService;
+        _context = context;
     }
 
     // GET /api/audioguides?lang=vi
@@ -30,8 +33,9 @@ public class AudioGuidesController : ControllerBase
         var created = await _audioService.CreateAsync(dto);
         return CreatedAtAction(nameof(Get), new { lang = created.LanguageCode }, created);
     }
-}
-[HttpDelete("{id}")]
+
+    // DELETE /api/audioguides/{id}
+    [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteAudioGuide(int id)
     {
         var item = await _context.AudioGuides.FindAsync(id);
@@ -45,3 +49,4 @@ public class AudioGuidesController : ControllerBase
 
         return NoContent(); // Trả về mã 204 No Content xóa thành công
     }
+}
