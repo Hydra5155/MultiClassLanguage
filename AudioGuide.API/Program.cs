@@ -39,7 +39,7 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Tự động tạo bảng & nạp dữ liệu seed nếu database trên SSMS chưa có
+// Tự động tạo bảng & seed dữ liệu
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -49,9 +49,11 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI();
 
+// ĐẶT CORS Ở ĐÂY (trước MapControllers và UseAuthorization)
 app.UseCors("AllowVercelAndLocal");
 
 app.UseAuthorization();
+
 app.MapControllers();
 
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
