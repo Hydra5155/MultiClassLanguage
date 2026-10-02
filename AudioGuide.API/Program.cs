@@ -1,67 +1,56 @@
-﻿using AudioGuide.BLL.Services;
-using AudioGuide.DAL;
+﻿using AudioGuide.Core.Interfaces;
+using AudioGuide.Core.Services;
+using AudioGuide.Infrastructure.Data;
+using AudioGuide.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
-using Scalar.AspNetCore;
+using System;
 
-namespace AudioGuide.API;
+var builder = WebApplication.CreateBuilder(args);
 
-public class Program
+// 1. Cấu hình InMemory Database độc lập
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseInMemoryDatabase("AudioGuideInMemoryDb"));
+
+// 2. Đăng ký Dependency Injection
+builder.Services.AddScoped<IPoiRepository, PoiRepository>();
+builder.Services.AddScoped<IAudioGuideService, AudioGuideService>();
+
+// 3. Đăng ký HttpClient Factory để stream âm thanh TTS trong QrGuideController
+builder.Services.AddHttpClient();
+
+// 4. Cấu hình CORS
+builder.Services.AddCors(options =>
 {
-    public static void Main(string[] args)
+    options.AddPolicy("AllowVercelAndLocal", policy =>
     {
-        var builder = WebApplication.CreateBuilder(args);
+        policy.SetIsOriginAllowed(origin => true)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
 
-        builder.Services.AddControllers();
-        builder.Services.AddOpenApi();
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
-        // Cấu hình Database
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-        if (!string.IsNullOrEmpty(connectionString))
-        {
-            builder.Services.AddDbContext<AppDbContext>(options =>
-                options.UseSqlServer(connectionString));
-        }
-        else
-        {
-            builder.Services.AddDbContext<AppDbContext>(options =>
-                options.UseInMemoryDatabase("AudioGuideDb"));
-        }
+var app = builder.Build();
 
-        builder.Services.AddScoped<IAudioGuideService, AudioGuideService>();
-
-        // Cấu hình CORS
-        builder.Services.AddCors(options =>
-        {
-            options.AddDefaultPolicy(policy =>
-            {
-                policy.AllowAnyOrigin()
-                      .AllowAnyHeader()
-                      .AllowAnyMethod();
-            });
-        });
-
-        var app = builder.Build();
-
-        using (var scope = app.Services.CreateScope())
-        {
-            try
-            {
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                db.Database.EnsureCreated();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"DB Init warning: {ex.Message}");
-            }
-        }
-
-        app.MapOpenApi();
-        app.MapScalarApiReference();
-
-        app.UseCors();
-        app.UseAuthorization();
-        app.MapControllers();
-
-        app.Run();
-    }
+// Tự động khởi tạo dữ liệu mẫu đã khai báo ở AppDbContext
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
 }
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
+app.UseCors("AllowVercelAndLocal");
+
+app.UseAuthorization();
+app.MapControllers();
+
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
+
+app.Run();

@@ -1,0 +1,15 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\AudioGuide.API",
+    "\\AudioGuide.API\\Controllers",
+    "\\AudioGuide.API\\Properties",
+    "\\AudioGuide.BLL",
+    "\\AudioGuide.BLL\\Services",
+    "\\AudioGuide.DAL",
+    "\\AudioGuide.Tests",
+    "\\Properties"
+  ],
+  "SelectedNode": "\\AudioGuide.API\\Program.cs",
+  "PreviewInSolutionExplorer": false
+}
