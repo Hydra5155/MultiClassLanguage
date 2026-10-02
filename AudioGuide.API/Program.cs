@@ -7,9 +7,12 @@ using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Cấu hình InMemory Database độc lập
+// 1. Cấu hình kết nối SQL Server và kích hoạt NetTopologySuite xử lý Point
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseInMemoryDatabase("AudioGuideInMemoryDb"));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        x => x.UseNetTopologySuite()
+    ));
 
 // 2. Đăng ký Dependency Injection
 builder.Services.AddScoped<IPoiRepository, PoiRepository>();
@@ -36,7 +39,7 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Tự động khởi tạo dữ liệu mẫu đã khai báo ở AppDbContext
+// Tự động tạo bảng & nạp dữ liệu seed nếu database trên SSMS chưa có
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
